@@ -76,35 +76,55 @@ namespace WFARoboticDrawing
 
         private Image Convert(Image originalImage)
         {
+            // Bitmap nesnesine dönüştürmek için önce Image tipini Bitmap tipine çeviriyoruz.
+            Bitmap originalBitmap = new Bitmap(originalImage);
             Bitmap convertedImage = new Bitmap(originalImage.Width, originalImage.Height);
 
-            using (Graphics g=Graphics.FromImage(convertedImage))
-            {
-                ColorMatrix colorMatrix = new ColorMatrix(new float[][]
-                {
-                    new float[]{.3f,.3f,.3f,0,0},
-                    new float[]{.59f,.59f,.59f,0,0},
-                    new float[]{.11f,.11f,.11f,0,0},
-                    new float[]{0,0,0,1,0},
-                    new float[]{0,0,0,0,1}
-                });
+            int threshold = 128; // Eşik değeri, bu değer ayarlanabilir.
 
-                using (ImageAttributes attributes=new ImageAttributes())
+            for (int i = 0; i < originalBitmap.Width; i++)
+            {
+                for (int j = 0; j < originalBitmap.Height; j++)
                 {
-                    attributes.SetColorMatrix(colorMatrix);
-                    g.DrawImage(originalImage, new Rectangle(0,0,originalImage.Width,originalImage.Height),0,0,originalImage.Width,originalImage.Height,GraphicsUnit.Pixel,attributes);
+                    Color originalColor = originalBitmap.GetPixel(i, j);
+                    // Gri tonlama hesaplaması yapıyoruz.
+                    int grayScale = (int)((originalColor.R * 0.3) + (originalColor.G * 0.59) + (originalColor.B * 0.11));
+                    // Eşik değerine göre siyah veya beyaz renk belirliyoruz.
+                    Color bwColor = grayScale < threshold ? Color.Black : Color.White;
+                    convertedImage.SetPixel(i, j, bwColor);
                 }
             }
+
             return convertedImage;
         }
 
         private Image ConvertToDrawing(Image convertedImage)
         {
-            Bitmap drawingImage = new Bitmap(convertedImage.Width, convertedImage.Height);
+            // Dönüştürülen görüntüyü Bitmap'e çeviriyoruz.
+            Bitmap sourceBitmap = new Bitmap(convertedImage);
+            // Yeni bir çizim için boş bir Bitmap oluşturuyoruz. 
+            // Boyutları kaynak görüntü ile aynı olacak.
+            Bitmap drawingImage = new Bitmap(sourceBitmap.Width, sourceBitmap.Height);
 
-            using (Graphics g=Graphics.FromImage(drawingImage))
+            using (Graphics g = Graphics.FromImage(drawingImage))
             {
-                g.DrawImage(convertedImage,0,0);
+                // Arka planı beyaz yapalım.
+                g.Clear(Color.White);
+
+                // Siyah pikselleri çizmek için bir kalem oluşturuyoruz.
+                Pen blackPen = new Pen(Color.Black);
+
+                for (int i = 0; i < sourceBitmap.Width; i++)
+                {
+                    for (int j = 0; j < sourceBitmap.Height; j++)
+                    {
+                        // Eğer piksel siyahsa, o noktada bir çizim yap.
+                        if (sourceBitmap.GetPixel(i, j).R == 0) // Siyah pikseller için Kırmızı kanalı 0'dır.
+                        {
+                            g.DrawRectangle(blackPen, i, j, 1, 1); // Pikseli çiz
+                        }
+                    }
+                }
             }
 
             return drawingImage;
