@@ -17,45 +17,21 @@ namespace WFARoboticDrawing
 {
     public partial class Form1 : Form
     {
-
-        private PictureBox originalPictureBox;
-        private PictureBox convertedPictureBox;
-        private Button loadButton;
-        private Button convertButton;
         public Form1()
         {
-            InitializeComponent(); // Kontrollerin ayarlanması InitializeComponent içinde yapılmalı.
-
-            // Kontrollerin ayarlanması ve olay işleyicilerinin atanması.
-            InitializeControls();
-        }
-        private void InitializeControls()
-        {
-
-            loadButton.Click += new EventHandler(loadButton_Click);
-            processButton.Click += new EventHandler(processButton_Click);
-
-            this.Controls.Add(originalPictureBox);
-            this.Controls.Add(convertedPictureBox);
-            this.Controls.Add(loadButton);
-            this.Controls.Add(processButton);
+            InitializeComponent();
         }
 
-        private void Form1_Load(object sender, EventArgs e)
-        {
-
-        }
-
+        #region Butonlar
         private void loadButton_Click(object sender, EventArgs e)
         {
-            OpenFileDialog openFileDialog = new OpenFileDialog { Filter = "Image Files | *.jpg;*.jpeg;*.png;*.bmp;*.gif" };
+            OpenFileDialog openFileDialog = new OpenFileDialog() { Filter = "Image Files | *.jpg; *.jpeg; *.png; *.bmp; *.gif" };
             if (openFileDialog.ShowDialog() == DialogResult.OK)
             {
                 originalPictureBox.Image = Image.FromFile(openFileDialog.FileName);
                 originalPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
             }
         }
-
         private void convertButton_Click(object sender, EventArgs e)
         {
             if (originalPictureBox.Image != null)
@@ -71,7 +47,6 @@ namespace WFARoboticDrawing
                 MessageBox.Show("Please load an image first.");
             }
         }
-
         private void processButton_Click(object sender, EventArgs e)
         {
             if (originalPictureBox.Image == null)
@@ -80,7 +55,6 @@ namespace WFARoboticDrawing
                 return;
             }
 
-            // Görüntüyü işleme ve çıktı dosyası adını belirleme kısmı
             SaveFileDialog saveFileDialog = new SaveFileDialog
             {
                 Filter = "Text Files (*.txt)|*.txt",
@@ -92,17 +66,26 @@ namespace WFARoboticDrawing
             if (saveFileDialog.ShowDialog() == DialogResult.OK)
             {
                 Bitmap image = new Bitmap(originalPictureBox.Image);
-                Bitmap convertedImage = ConvertToBlackAndWhite(image); // Dönüşüm fonksiyonunuzu çağırın
-                List<Point> pathPoints = FindPathPoints(convertedImage); // Yolu bulun
-                WriteRobotCommandsToFile(pathPoints, saveFileDialog.FileName); // Komutları dosyaya yazın
+                Bitmap convertedImage = ConvertToBlackAndWhite(image);
+                convertedPictureBox.Image = convertedImage;
+                convertedPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+
+                List<Point> pathPoints = FindPathPoints(convertedImage);
+
+                // Yol noktalarını basitleştir
+                double tolerance = 2.0; // Basitleştirme toleransı, ihtiyacınıza göre ayarlayabilirsiniz
+                List<Point> simplifiedPath = DouglasPeucker.Simplify(pathPoints, tolerance);
+
+                // Koordinatları dönüştür (sol alt köşeyi 0,0 olarak kabul et)
+                List<Point> transformedPath = TransformPoints(simplifiedPath, image.Height);
+
+                // Robot komut dosyasını yaz
+                WriteRobotCommandsToFile(transformedPath, saveFileDialog.FileName);
             }
         }
+        #endregion
 
-        private Image LoadImage(string path)
-        {
-            return Image.FromFile(path);
-        }
-
+        #region Siyah - Beyaz Dönüşümü
         private Bitmap ConvertToBlackAndWhite(Bitmap originalBitmap)
         {
             // Bitmap nesnesine dönüştürmek için önce Image tipini Bitmap tipine çeviriyoruz.
@@ -125,7 +108,9 @@ namespace WFARoboticDrawing
 
             return convertedImage;
         }
+        #endregion
 
+        #region Dönüştürme Metotları
         private Image ConvertToDrawing(Image convertedImage)
         {
             // Dönüştürülen görüntüyü Bitmap'e çeviriyoruz.
@@ -157,7 +142,9 @@ namespace WFARoboticDrawing
 
             return drawingImage;
         }
+        #endregion
 
+        #region Yol Metotları
         public List<Point> FindPathPoints(Bitmap image)
         {
             List<Point> pathPoints = new List<Point>();
@@ -178,10 +165,22 @@ namespace WFARoboticDrawing
                     }
                 }
             }
-
             return pathPoints;
         }
 
+        public List<Point> TransformPoints(List<Point> pathPoints, int height)
+        {
+            List<Point> transformedPoints = new List<Point>();
+            foreach (var point in pathPoints)
+            {
+                transformedPoints.Add(new Point(point.X, height - point.Y));
+            }
+            return transformedPoints;
+        }
+
+        #endregion
+
+        #region Komut Metotları
         public void GenerateRobotCommands(List<Point> pathPoints)
         {
             foreach (Point point in pathPoints)
@@ -212,24 +211,6 @@ namespace WFARoboticDrawing
                 writer.WriteLine("END");
             }
         }
-
-        //private void processButton_Click(object sender, EventArgs e)
-        //{
-        //    if (originalPictureBox.Image == null)
-        //    {
-        //        MessageBox.Show("Please load an image first.");
-        //        return;
-        //    }
-
-        //    Bitmap image = new Bitmap(originalPictureBox.Image);
-        //    Bitmap convertedImage = ConvertToBlackAndWhite(image);
-        //    convertedPictureBox.Image = convertedImage;
-        //    convertedPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
-
-        //    List<Point> pathPoints = FindPathPoints(convertedImage);
-        //    string filePath = @"C:\\Users\\serha\\Desktop\\IUC\\Bitirme Projesi\deneme.txt"; // Komut dosyasının kaydedileceği yol
-        //    WriteRobotCommandsToFile(pathPoints, filePath);
-        //}
-        
+        #endregion
     }
 }
