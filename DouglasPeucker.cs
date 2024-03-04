@@ -19,6 +19,12 @@ namespace WFARoboticDrawing
             pointIndexsToKeep.Add(firstPoint);
             pointIndexsToKeep.Add(lastPoint);
 
+            // The first and the last point cannot be the same
+            while (points[firstPoint].Equals(points[lastPoint]))
+            {
+                lastPoint--;
+            }
+
             // Ana işlevi başlatın
             DouglasPeuckerReduction(points, firstPoint, lastPoint, tolerance, ref pointIndexsToKeep);
 
