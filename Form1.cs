@@ -72,56 +72,25 @@ namespace WFARoboticDrawing
                 convertedPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
 
                 List<Point> pathPoints = FindPathPoints(convertedImage);
+                List<List<Point>> simplifiedClusters = SimplifyPathBasedOnNeighborhood(pathPoints, 5.0);
 
-                //// Yol noktalarını basitleştir
-                //double tolerance = 2.0; // Basitleştirme toleransı, ihtiyacınıza göre ayarlayabilirsiniz
-                //List<Point> simplifiedPath = DouglasPeucker.Simplify(pathPoints, tolerance);
+                List<Point> simplifiedPath = new List<Point>();
+                foreach (var cluster in simplifiedClusters)
+                {
+                    simplifiedPath.AddRange(cluster);
+                }
 
-                //// Koordinatları dönüştür (sol alt köşeyi 0,0 olarak kabul et)
-                //List<Point> transformedPath = TransformPoints(simplifiedPath, image.Height);
+                // Step 3: Identify and Simplify Curves
+                List<Point> curveOptimizedPath = IdentifyAndSimplifyCurves(simplifiedPath, 10.0, 2.0);
 
-                //// Robot komut dosyasını yaz
-                //WriteRobotCommandsToFile(transformedPath, saveFileDialog.FileName);
+                // Step 4: Optimize Path for Directional Consistency
+                List<Point> directionOptimizedPath = OptimizePathForDirectionalConsistency(curveOptimizedPath);
 
-                //// Optimize the path for directional consistency
-                //List<Point> optimizedPath = OptimizePathForDirectionConsistency(pathPoints);
+                // Step 5: Transform Coordinates
+                List<Point> transformedPath = TransformCoordinates(directionOptimizedPath, convertedImage.Height);
 
-                //// Generate commands based on the optimized path and angle threshold
-                //double angleThreshold = 10.0; // Define your angle threshold here
-                //List<string> commands = GenerateOptimizedPathCommands(optimizedPath, angleThreshold);
-
-                //// Write the commands to the file
-                //WriteRobotCommandsToFile(commands, saveFileDialog.FileName);
-
-                // 2
-
-                // Simplify the path points based on neighborhood relations
-                List<Point> simplifiedPath = SimplifyPathBasedOnNeighborhood(pathPoints, 20.0);
-
-                // Optimize the path for direction consistency
-                List<Point> optimizedPath = OptimizePathForDirectionConsistency(simplifiedPath);
-
-                //// Transform the coordinates
-                //List<Point> transformedPath = TransformCoordinates(optimizedPath, convertedImage.Height);
-
-                //// Generate commands based on the optimized path
-                //List<string> commands = GenerateOptimizedPathCommands(transformedPath, 10.0); // Adjust the angle threshold as needed
-
-                //// Write the commands to the file
-                //WriteRobotCommandsToFile(commands, saveFileDialog.FileName);
-
-                // Identify and simplify curves in the path
-                double angleThreshold = 10.0; // Adjust based on your needs
-                double curveSimplificationTolerance = 2.0; // Adjust based on your needs
-                List<Point> curveOptimizedPath = IdentifyAndSimplifyCurves(optimizedPath, angleThreshold, curveSimplificationTolerance);
-
-                // Transform the coordinates
-                List<Point> transformedPath = TransformCoordinates(curveOptimizedPath, convertedImage.Height);
-
-                // Generate commands based on the optimized path
-                List<string> commands = GenerateOptimizedPathCommands(transformedPath, 10.0); // Adjust the angle threshold as needed
-
-                // Write the commands to the file
+                // Step 6: Generate and Output Commands
+                List<string> commands = GenerateOptimizedPathCommands(transformedPath, 10.0);
                 WriteRobotCommandsToFile(commands, saveFileDialog.FileName);
             }
         }
@@ -502,7 +471,7 @@ namespace WFARoboticDrawing
             {
 
                 // Inside IdentifyAndSimplifyClusters method
-                List<Point> simplifiedCluster = SimplifyCluster(cluster, 10.0);
+                List<Point> simplifiedCluster = SimplifyCluster(cluster, 5.0);
 
                 simplifiedClusters.Add(simplifiedCluster);
             }
@@ -527,9 +496,16 @@ namespace WFARoboticDrawing
                 // Keep only the start and end points for a line
                 return new List<Point> { cluster.First(), cluster.Last() };
             }
+            else
+            {
+                // Calculate the centroid of the cluster
+                int avgX = (int)cluster.Average(p => p.X);
+                int avgY = (int)cluster.Average(p => p.Y);
+                Point centroid = new Point(avgX, avgY);
 
-            // Return a list containing only the closest point
-            return cluster;
+                // Return the centroid as the representative point
+                return new List<Point> { centroid };
+            }
         }
 
         // İki nokta arasındaki mesafe
@@ -539,32 +515,45 @@ namespace WFARoboticDrawing
             return Math.Sqrt(Math.Pow(p1.X - p2.X, 2) + Math.Pow(p1.Y - p2.Y, 2));
         }
 
-        private List<Point> SimplifyPathBasedOnNeighborhood(List<Point> pathPoints, double threshold)
+        private List<List<Point>> SimplifyPathBasedOnNeighborhood(List<Point> pathPoints, double threshold)
         {
             // Identify and simplify clusters
             List<List<Point>> clusters = IdentifyAndSimplifyClusters(pathPoints, threshold);
 
-            // Flatten the list of lists into a single list
-            List<Point> simplifiedPath = clusters.SelectMany(cluster => cluster).ToList();
-
-
-            return simplifiedPath; // Adjust the threshold as needed.
+            // You don't need to flatten the clusters into a single list.
+            // Just return the clusters as they are.
+            return clusters;
         }
+
+        private List<Point> OptimizePathForDirectionalConsistency(List<Point> pathPoints)
+        {
+            if (pathPoints == null || !pathPoints.Any())
+                return pathPoints;
+
+            List<Point> optimizedPath = new List<Point>();
+            HashSet<Point> remainingPoints = new HashSet<Point>(pathPoints);
+
+            // Start with the bottom-left point as the first point
+            Point currentPoint = pathPoints.OrderBy(p => p.X).ThenBy(p => p.Y).First();
+            optimizedPath.Add(currentPoint);
+            remainingPoints.Remove(currentPoint);
+
+            while (remainingPoints.Any())
+            {
+                // Find the nearest neighbor to the current point
+                Point nextPoint = remainingPoints.OrderBy(p => DistanceBetweenPoints(currentPoint, p)).First();
+                optimizedPath.Add(nextPoint);
+                remainingPoints.Remove(nextPoint);
+                currentPoint = nextPoint;
+            }
+
+            return optimizedPath;
+        }
+
 
         #endregion
 
         #region Komut Metotları
-        public void GenerateRobotCommands(List<Point> pathPoints)
-        {
-            foreach (Point point in pathPoints)
-            {
-                // Burada, her bir nokta için robotun anlayabileceği komutlar oluşacak.
-                // Örneğin: MoveL(x, y) şeklinde bir komut olabilir.
-                // Bu, robotun x, y koordinatına lineer hareket etmesi gerektiğini belirtir.
-                Console.WriteLine($"MoveL({point.X}, {point.Y});");
-            }
-        }
-
         private void WriteRobotCommandsToFile(List<string> commands, string filePath)
         {
             using (StreamWriter writer = new StreamWriter(filePath))
